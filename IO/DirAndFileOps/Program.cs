@@ -2,67 +2,85 @@
 using DirAndFileOps;
 using System.Diagnostics;
 
-//await RandomFileGenerator.Main();
-//return;
+Console.WriteLine("Enter folder path containing *.cix files:");
+string folderCix = Console.ReadLine();
+Console.WriteLine("Enter folder path containing *.pdf files:");
+string folderPdf = Console.ReadLine();
+Console.WriteLine("Enter folder path for comparison output file:");
+string outputFolder = Console.ReadLine(); 
+string outputTxtFile = Path.Combine(outputFolder, "comparison.txt"); 
+string outputCsvFile = Path.Combine(outputFolder, "comparison.csv");
+int countCix = 0, countPdf = 0;
 
 var stopwatch = Stopwatch.StartNew();
-
-string folderA = @"C:\Users\ketan\Projects\Temp\folderA";
-string folderB = @"C:\Users\ketan\Projects\Temp\folderB";
-string outputFile = @"C:\Users\ketan\Projects\Temp\matches.csv";
-int countA = 0, countB = 0;
 
 try
 {
 	// Build dict for folder B
-    var fileNameToFullPathsB = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-    Console.WriteLine($"Loading files from {folderB}...");
-    foreach (var filePath in Directory.EnumerateFiles(folderB))
+    var fileNameToFullPathsPdf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+    Console.WriteLine($"Loading files from {folderPdf}...");
+    foreach (var filePath in Directory.EnumerateFiles(folderPdf,"*.pdf"))
     {
         string fileNameWithoutExt = Path.GetFileNameWithoutExtension(filePath);
 
-        if (!fileNameToFullPathsB.TryGetValue(fileNameWithoutExt, out var list))
+        if (!fileNameToFullPathsPdf.TryGetValue(fileNameWithoutExt, out var list))
         {
             list = new List<string>();
-            fileNameToFullPathsB[fileNameWithoutExt] = list;
+            fileNameToFullPathsPdf[fileNameWithoutExt] = list;
         }
 
         list.Add(filePath);
-        countB++;
+        countPdf++;
     }
-    Console.WriteLine($"Loaded {countB} filenames from {folderB}");
+    Console.WriteLine($"Loaded {countPdf} filenames from {folderPdf}");
 
     // Process folder A
-    Console.WriteLine($"Comparing files from {folderA}...");
-    var matches = new List<(string fileA, string fileB)>();
-    foreach (var filePathA in Directory.EnumerateFiles(folderA))
+    Console.WriteLine($"Comparing files from {folderCix}...");
+    var matches = new List<(string fileCix, string filePdf)>();
+    var uniqueCixMatches = new HashSet<string>();
+    foreach (var filePathCix in Directory.EnumerateFiles(folderCix,"*.cix"))
     {
-        string fileNameWithoutExtA = Path.GetFileNameWithoutExtension(filePathA);
-        if (fileNameToFullPathsB.TryGetValue(fileNameWithoutExtA, out var matchingFilePathsB)) 
+        string fileNameWithoutExtCix = Path.GetFileNameWithoutExtension(filePathCix);
+
+        var matchingFilesInPdf = fileNameToFullPathsPdf
+        .Where(b => b.Key.StartsWith(fileNameWithoutExtCix, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+        foreach (var matchingFile in matchingFilesInPdf)
         {
-            foreach (var matchingPathB in matchingFilePathsB)
+            foreach (var file in matchingFile.Value)
             {
-                matches.Add((filePathA, matchingPathB));
-                //Console.WriteLine($"Match found: {filePathA} <--> {matchingPathB}");
+                matches.Add((filePathCix, file));
+                uniqueCixMatches.Add(fileNameWithoutExtCix);
             }
         }
-        countA++;
+        countCix++;
     }
-    Console.WriteLine($"Compared {countA} filenames from {folderA}");
+    Console.WriteLine($"Compared {countCix} filenames from {folderCix}");
 
     // Write output
-    Console.WriteLine("Writing output file...");
-    using (var writer = new StreamWriter(outputFile))
+    Console.WriteLine("Writing output file to csv...");
+    using (var writer = new StreamWriter(outputCsvFile))
     {
-        writer.WriteLine($"{folderA},{folderB}");
+        writer.WriteLine($"CIXs,PDFs");
 
         foreach (var match in matches)
         {
-            writer.WriteLine($"\"{match.fileA}\",\"{match.fileB}\"");
+            writer.WriteLine($"\"{match.fileCix}\",\"{match.filePdf}\"");
+        }
+    }
+    Console.WriteLine($"Matching filenames written to {outputCsvFile}");
+
+    Console.WriteLine("Writing output file to txt...");
+    using (var writer = new StreamWriter(outputTxtFile))
+    {
+        foreach (var match in uniqueCixMatches)
+        {
+            writer.WriteLine(match);
         }
     }
 
-    Console.WriteLine($"Matching filenames written to {outputFile}");
+    Console.WriteLine($"Matching filenames written to {outputTxtFile}");
 }
 catch (IOException ex)
 {
